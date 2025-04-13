@@ -1,4 +1,4 @@
-import java.io.File;
+import java.io.*;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.FileVisitResult;
@@ -10,6 +10,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Iterator;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.stream.*;
 import static java.nio.file.FileVisitResult.CONTINUE;
 
 public class JavaClassFinder {
@@ -20,6 +21,8 @@ public class JavaClassFinder {
     private static boolean debug = false;
     private static boolean pathInfo = true;
     private static boolean packageInfo = true;
+    private static boolean source = false;
+    private static boolean rtOnly = false;
 
     public static void main(String[] args) throws IOException {
         String[] cp = System.getProperty("java.class.path").split(File.pathSeparator);
@@ -27,13 +30,15 @@ public class JavaClassFinder {
         if (args.length == 0) {
             usage();
         }
-
         for (String arg : args) {
             if (arg.startsWith("-mp")) privateMethods = true;
             else if (arg.startsWith("-m")) methods = true;
             else if (arg.startsWith("-debug")) debug = true;
             else if (arg.startsWith("-path")) pathInfo = false;
             else if (arg.startsWith("-package")) packageInfo = false;
+            else if (arg.startsWith("-rt")) rtOnly = true;
+            else if (arg.startsWith("-s")) { source = true; }
+            else if (arg.startsWith("-h")) usage();
             else className = arg;
         }
 
@@ -44,25 +49,49 @@ public class JavaClassFinder {
         rtClasses(className);
 
         for (String c : cp) {
+            String pathToJar = c;
             if (!c.contains(".jar")) {
                 JavaClassFinder.printDebugln("Path: " + c);
                 Path path = Paths.get(c);
-                PrintFiles visitor = new PrintFiles(className, path);
-                Files.walkFileTree(path, visitor);
+                File realFile = path.toFile();
+                if (realFile.exists()) {
+                  PrintFiles visitor = new PrintFiles(className, path);
+                  Files.walkFileTree(path, visitor);
+                }
             } else {
-                JarFile jarFile = new JarFile(c);
+                JarFile jarFile = null; 
+                if (source) {
+                  String sourcePath = c.replaceAll(".jar", "-sources.jar");
+                  File f = new File(sourcePath);
+                  if (!f.exists()) {
+                    System.err.println("File does not exist: " + sourcePath);
+                    continue;
+                  }
+                  jarFile = new JarFile(sourcePath);
+                  pathToJar = sourcePath;
+                } else {
+                  File f = new File(c);
+                  if (!f.exists()) {
+                    continue;
+                  }
+                  jarFile = new JarFile(c);
+                }
                 boolean firstFind = true;
 
                 for (Iterator<JarEntry> it = jarFile.entries().asIterator(); it.hasNext(); ) {
                     JarEntry entry = it.next();
-
-                    if (entry.getRealName().contains(".class") && entry.getRealName().contains(className)) {
+                    String realName = entry.getRealName();
+                    String extension = source ? ".java" : ".class";
+                    if (realName.contains(className.replaceAll("\\.", "/"))) {
+                      if (realName.contains(extension)) { 
                         if (firstFind) {
-                            firstFind = false;
-                            JavaClassFinder.printPath(c);
+                          firstFind = false;
+                          JavaClassFinder.printPath(pathToJar);
                         }
-                        JavaClassFinder.printPackage(entry.getRealName());
-                        JavaClassFinder.printJarMethods(c, entry.getRealName());
+                        JavaClassFinder.printPackage(realName);
+                        JavaClassFinder.printJarMethods(pathToJar, realName);
+                        JavaClassFinder.printSourceCode(jarFile, entry);
+                      }
                     }
                 }
             }
@@ -76,6 +105,8 @@ public class JavaClassFinder {
         System.err.println("-mp : Get the private methods of the class");
         System.err.println("-path : Doesn't print the path of the class");
         System.err.println("-package : Doesn't print the package of the class");
+        System.err.println("-rt : Only search for class in the runtime");
+        System.err.println("-s : Search for the source, only prints the first one");
         System.exit(1);
     }
 
@@ -91,6 +122,8 @@ public class JavaClassFinder {
             } catch (ClassNotFoundException e) {
             }
         }
+
+        if (rtOnly) System.exit(0); 
     }
 
     public static String fromPathToPackage(String path) {
@@ -170,6 +203,17 @@ public class JavaClassFinder {
             ex.printStackTrace();
             System.exit(1);
         }
+    }
+
+    private static void printSourceCode(JarFile jarFile, JarEntry entry) {
+      if (source) {
+        try (InputStream s = jarFile.getInputStream(entry)) {
+          System.out.println(new BufferedReader(new InputStreamReader(s)).lines().collect(Collectors.joining("\n"))); 
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        System.exit(0);
+      }
     }
 
     private static void printPath(String path) {
