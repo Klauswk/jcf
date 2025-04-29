@@ -41,7 +41,7 @@ public class JavaClassFinder {
             else if (arg.startsWith("-package")) packageInfo = false;
             else if (arg.startsWith("-rt")) rtOnly = true;
             else if (arg.startsWith("-s")) { source = true; }
-            else if (arg.startsWith("-jdk-source")) { 
+            else if (arg.startsWith("-js")) { 
               if (i + 1 >= args.length) {
                 System.out.println("Missing jdk source location");
                 usage();
@@ -151,6 +151,7 @@ public class JavaClassFinder {
         System.err.println("-package : Doesn't print the package of the class");
         System.err.println("-rt : Only search for class in the runtime");
         System.err.println("-s : Search for the source, only prints the first one");
+        System.err.println("-js <path-to-jdk-root-source-folder>");
         System.exit(1);
     }
 
