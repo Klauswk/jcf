@@ -11,6 +11,7 @@ import java.util.Iterator;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.*;
+import java.util.Arrays;
 import static java.nio.file.FileVisitResult.CONTINUE;
 
 public class JavaClassFinder {
@@ -23,6 +24,7 @@ public class JavaClassFinder {
     private static boolean packageInfo = true;
     private static boolean source = false;
     private static boolean rtOnly = false;
+    private static String jdkSource = null;
 
     public static void main(String[] args) throws IOException {
         String[] cp = System.getProperty("java.class.path").split(File.pathSeparator);
@@ -30,7 +32,8 @@ public class JavaClassFinder {
         if (args.length == 0) {
             usage();
         }
-        for (String arg : args) {
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
             if (arg.startsWith("-mp")) privateMethods = true;
             else if (arg.startsWith("-m")) methods = true;
             else if (arg.startsWith("-debug")) debug = true;
@@ -38,6 +41,47 @@ public class JavaClassFinder {
             else if (arg.startsWith("-package")) packageInfo = false;
             else if (arg.startsWith("-rt")) rtOnly = true;
             else if (arg.startsWith("-s")) { source = true; }
+            else if (arg.startsWith("-jdk-source")) { 
+              if (i + 1 >= args.length) {
+                System.out.println("Missing jdk source location");
+                usage();
+                System.exit(1);
+              }
+
+              i++;
+              Path jdkSourceLocation = Paths.get(args[i]);
+
+              File jdkSourceFile = jdkSourceLocation.toFile();
+
+              if (!jdkSourceFile.exists()) {
+                System.err.println("File path '" + jdkSourceLocation + "' does not exist");
+                usage();
+                System.exit(1);
+              }
+
+              if (!jdkSourceFile.isDirectory()) {
+                System.err.println("File path '" + jdkSourceLocation + "' is not a directory");
+                System.exit(1);
+              }
+
+              Path javaClassesFolder = jdkSourceLocation.resolve("src/");
+
+              File javaClassFolderFile = javaClassesFolder.toFile();
+
+              if (!javaClassFolderFile.exists()) {
+                System.err.println("File path '" + javaClassesFolder + "' does not exist");
+                usage();
+                System.exit(1);
+              }
+
+              if (!javaClassFolderFile.isDirectory()) {
+                System.err.println("File path '" + javaClassesFolder + "' is not a directory");
+                System.exit(1);
+              }
+
+              cp = Arrays.copyOf(cp, cp.length + 1);
+              cp[cp.length - 1] = javaClassesFolder.toString();
+            }
             else if (arg.startsWith("-h")) usage();
             else className = arg;
         }
@@ -90,7 +134,7 @@ public class JavaClassFinder {
                         }
                         JavaClassFinder.printPackage(realName);
                         JavaClassFinder.printJarMethods(pathToJar, realName);
-                        JavaClassFinder.printSourceCode(jarFile, entry);
+                        JavaClassFinder.printJarSourceCode(jarFile, entry);
                       }
                     }
                 }
@@ -152,6 +196,7 @@ public class JavaClassFinder {
                 JavaClassFinder.printPath(file.toString());
                 JavaClassFinder.printPackage(newPath.toString());
                 JavaClassFinder.printMethods(file.toString());
+                JavaClassFinder.printSourceCode(file);
             }
             return CONTINUE;
         }
@@ -205,7 +250,18 @@ public class JavaClassFinder {
         }
     }
 
-    private static void printSourceCode(JarFile jarFile, JarEntry entry) {
+    private static void printSourceCode(Path path) {
+      if (source) {
+        try (InputStream s = new FileInputStream(path.toFile())) {
+          System.out.println(new BufferedReader(new InputStreamReader(s)).lines().collect(Collectors.joining("\n"))); 
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        System.exit(0);
+      }
+    }
+
+    private static void printJarSourceCode(JarFile jarFile, JarEntry entry) {
       if (source) {
         try (InputStream s = jarFile.getInputStream(entry)) {
           System.out.println(new BufferedReader(new InputStreamReader(s)).lines().collect(Collectors.joining("\n"))); 

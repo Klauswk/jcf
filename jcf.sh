@@ -2,6 +2,6 @@
 
 pushd $(dirname $0) > /dev/null
 
-java jcf.java "$@"
+java JavaClassFinder.java "$@"
 
 popd > /dev/null
