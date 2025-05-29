@@ -1,0 +1,5 @@
+#!/bin/bash
+
+mkdir -p ~/opt/
+cp JavaClassFinder.java ~/opt/
+cp jcf.sh ~/opt/jcf
