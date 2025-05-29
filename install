@@ -1,5 +1,11 @@
 #!/bin/bash
 
-mkdir -p ~/opt/
-cp JavaClassFinder.java ~/opt/
-cp jcf.sh ~/opt/jcf
+set -xe
+
+if [ -z "$DESTDIR" ]; then
+  DESTDIR=~/opt
+fi
+
+mkdir -p $DESTDIR 
+cp JavaClassFinder.java $DESTDIR 
+cp jcf.sh "$DESTDIR/jcf"
